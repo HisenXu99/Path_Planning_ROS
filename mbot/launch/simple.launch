@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="mbot" type="publisher.py" name="publisher" output="screen" />
+    <node pkg="mbot" type="Camera_Subscriber.py" name="Camera_Subscriber" output="screen" />
+</launch>
+
+

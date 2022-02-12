@@ -1,0 +1,28 @@
+<launch>
+    <arg name="x_pos" default="0.0"/>
+    <arg name="y_pos" default="0.0"/>
+    <arg name="z_pos" default="0.0"/>
+    <arg name="x_pos_goal" default="5.0"/>
+    <arg name="y_pos_goal" default="5.0"/>
+    <arg name="z_pos_goal" default="5.0"/>
+    <param name="/use_sim_time" value="true" />  
+  
+    <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+
+
+    <group ns="ns0" >
+        <param name="robot_description" command="$(find xacro)/xacro --inorder $(find mbot)/urdf/mybot.xacro " />
+        <node pkg="gazebo_ros" type="spawn_model" name="spawn_robot" args="-urdf -model agent -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param /ns0/robot_description" />
+    </group>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+    <group ns="ns1" >
+        <param name="robot_description" command="$(find xacro)/xacro --inorder $(find mbot)/urdf/goal.xacro" />
+        <node pkg="gazebo_ros" type="spawn_model" name="spawn_goal"   args="-urdf -model goal -x $(arg x_pos_goal) -y $(arg y_pos_goal) -z $(arg z_pos_goal) -param /ns1/robot_description" />
+    </group>
+
+
+</launch>
+
+
+
