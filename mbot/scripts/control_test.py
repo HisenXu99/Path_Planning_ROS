@@ -1,17 +1,17 @@
-# import imp
+import tensorflow.compat.v1 as tf
+import numpy as np
 import random
 from env_mbot import envmodel
-# import tensorflow as tf
-import tensorflow.compat.v1 as tf
 import A2C
-import  numpy as np
 
 
 
-LR_A = 0.01    # learning rate for actor
+LR_A = 0.001    # learning rate for actor
 LR_C = 0.01     # learning rate for critic
-MAX_EPISODE = 500
+MAX_EPISODE = 100
 DISPLAY_REWARD_THRESHOLD = 0.1  # renders environment if total episode reward is greater then this threshold
+RENDER = False
+
 
 
 env=envmodel()
@@ -23,26 +23,27 @@ action_dict = {0: [1.0, -1.0], 1: [1.0, -0.5], 2: [1.0, 0.0],
                9: [0.0, 0.0], 10: [0.0, 1.0]}
 
 sess = tf.Session()
+
+model_path = 'save_/filename.ckpt'#保存路径为相对路径的save文件夹,保存名为filename.ckpt
+
 actor = A2C.Actor(sess, n_features=6, n_actions=11, lr=LR_A)
 critic = A2C.Critic(sess, n_features=6, lr=LR_C)
-saver = tf.train.Saver()  #声明ta.train.Saver()类用于保存
-sess.run(tf.global_variables_initializer())
+saver = tf.train.Saver()
+load_path = saver.restore(sess, model_path)
+# actor = A2C.Actor(sess, n_features=4, n_actions=5, lr=LR_A)
+# critic = A2C.Critic(sess, n_features=4, lr=LR_C)
+# sess.run(tf.global_variables_initializer())
 
-agent_start_x=random.randint(-3, 3)
-agent_start_y=random.randint(-3, 3)
-goal_x=random.randint(-3, 3)
-goal_y=random.randint(-3, 3)
 
-agent_start_x=5
-agent_start_y=5
-goal_x=-5
-goal_y=-5
 
 
 
 def train():
     for i_episode in range(MAX_EPISODE):
-
+        agent_start_x=random.randint(-10, 10)
+        agent_start_y=random.randint(-10, 10)
+        goal_x=random.randint(-10, 10)
+        goal_y=random.randint(-10, 10)
         env.reset_env(start=[agent_start_x,agent_start_y],goal=[goal_x,goal_y])
         observation = np.ones(6)
         observation[0]=agent_start_x
@@ -56,8 +57,8 @@ def train():
             env.step(action_dict[action])
             observation_,reward,done = env.get_env()
 
-            td_error = critic.learn(observation, reward, observation_)  # gradient = grad[r + gamma * V(s_) - V(s)]
-            actor.learn(observation, action, td_error)     # true_gradient = grad[logPi(s,a) * td_error]
+            # td_error = critic.learn(observation, reward, observation_)  # gradient = grad[r + gamma * V(s_) - V(s)]
+            # actor.learn(observation, action, td_error)     # true_gradient = grad[logPi(s,a) * td_error]
             observation=observation_
             track_r.append(reward)
 
@@ -66,20 +67,6 @@ def train():
                 print("episode:", i_episode, "  reward:", ep_rs_sum)
                 break
 
-    print("123")
-    save_path = saver.save(sess,'save1_/filename.ckpt')#保存路径为相对路径的save文件夹,保存名为filename.ckpt
-    print ("[+] Model saved in file: %s" % save_path)
-
-
-def rand():
-    env.reset_env(start=[5.0, 5.0], goal=[-5.0,-5.0])
-    for i_episode in range(MAX_EPISODE):
-        action = action_dict[random.randint(0, 9)]
-        print(action)
-        env.step(action)
-        observation_, agent_x, agent_y = env.get_env()
-        print(observation_[1])
-        print(observation_[2])
 
 if __name__ == '__main__':
     train()

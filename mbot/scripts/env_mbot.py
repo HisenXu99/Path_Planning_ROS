@@ -96,8 +96,8 @@ import numpy as np
 #             print ("Service call failed: %s"%"e")
 
 
-
-
+MAXENVSIZE = 30.0  # 边长为30的正方形作为环境的大小
+Image_matrix = []
 
 # if __name__ == '__main__':
 #     person_subscriber()
@@ -157,6 +157,31 @@ class envmodel():
         self.cmd        = [0.0, 0.0]                           # agent robot的控制指令
         self.done_list  = False                                # episode是否结束的标志
 
+    def gazebo_states_callback(self, data):
+        self.gazebo_model_states = data
+        # name: ['ground_plane', 'jackal1', 'jackal2', 'jackal0',...]
+        for i in range(len(data.name)):
+            if data.name[i] == self.agentrobot:
+                # robotstate--->x,y,v,w,yaw,vx,vy
+                self.robotstate[0] = data.pose[i].position.x
+                self.robotstate[1] = data.pose[i].position.y
+                v = math.sqrt(data.twist[i].linear.x**2 + data.twist[i].linear.y**2)
+                self.robotstate[2] = v
+                self.robotstate[3] = data.twist[i].angular.z
+                rpy = self.euler_from_quaternion(data.pose[i].orientation.x,data.pose[i].orientation.y,
+                data.pose[i].orientation.z,data.pose[i].orientation.w)
+                self.robotstate[4] = rpy[2]
+                self.robotstate[5] = data.twist[i].linear.x
+                self.robotstate[6] = data.twist[i].linear.y
+
+    def image_callback(self, data):
+        try:
+            self.image_matrix_callback = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
+            cv2.imshow("frame" , self.image_matrix_callback)
+            cv2.waitKey(3)
+        except CvBridgeError as e:
+            print(e)
+
     def quaternion_from_euler(self, r, p, y):
         q = [0, 0, 0, 0]
         q[3] = math.cos(r / 2) * math.cos(p / 2) * math.cos(y / 2) + math.sin(r / 2) * math.sin(p / 2) * math.sin(y / 2)
@@ -184,34 +209,6 @@ class envmodel():
             euler[2] = math.atan2(2 * (x * y + w * z), w * w + x * x - y * y - z * z)
         
         return euler
-
-    def gazebo_states_callback(self, data):
-        self.gazebo_model_states = data
-        # name: ['ground_plane', 'jackal1', 'jackal2', 'jackal0',...]
-
-
-        for i in range(len(data.name)):
-            if data.name[i] == self.agentrobot:
-                # robotstate--->x,y,v,w,yaw,vx,vy
-                self.robotstate[0] = data.pose[i].position.x
-                self.robotstate[1] = data.pose[i].position.y
-                v = math.sqrt(data.twist[i].linear.x**2 + data.twist[i].linear.y**2)
-                self.robotstate[2] = v
-                self.robotstate[3] = data.twist[i].angular.z
-                rpy = self.euler_from_quaternion(data.pose[i].orientation.x,data.pose[i].orientation.y,
-                data.pose[i].orientation.z,data.pose[i].orientation.w)
-                self.robotstate[4] = rpy[2]
-                self.robotstate[5] = data.twist[i].linear.x
-                self.robotstate[6] = data.twist[i].linear.y
-
-    def image_callback(self, data):
-        try:
-            self.image_matrix_callback = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
-            cv2.imshow("frame" , self.image_matrix_callback)
-            cv2.waitKey(3)
-        except CvBridgeError as e:
-            print(e)
-
 
     def getreward(self):
         
@@ -284,7 +281,6 @@ class envmodel():
         # randangle = 2 * math.pi * np.random.random_sample(1) - math.pi
         # 根据model name对每个物体的位置初始化
         state = ModelState()
-        print(self.gazebo_model_states.name)
         for i in range(len(self.gazebo_model_states.name)):
             # if self.gazebo_model_states.name[i] == "point_start":
             #     state.reference_frame = 'world'
@@ -301,7 +297,6 @@ class envmodel():
             #     state.pose.position.y = self.gp[1]
             #     val(state)
             if self.gazebo_model_states.name[i] == "goal":
-                print("goal")
                 state.reference_frame = 'world'
                 state.pose.position.z = 0.0
                 state.model_name = self.gazebo_model_states.name[i]
@@ -336,10 +331,104 @@ class envmodel():
                     val(state)
             '''
         self.done_list = False  # episode结束的标志
-        print("The environment has been reset!")     
         time.sleep(2.0)
 
+    def get_env(self):
+        env_info=[]
+        observation=[]
+        # input2-->agent robot的v,w,d,theta
+        selfstate = [0.0, 0.0, 0.0, 0.0]
+        # robotstate--->x,y,v,w,yaw,vx,vy
+        selfstate[0] = self.robotstate[2]  # v
+        selfstate[1] = self.robotstate[3]  # w
+        # d代表agent机器人距离目标的位置-->归一化[0,1]
+        selfstate[2] = self.d/MAXENVSIZE
+        dx = -(self.robotstate[0]-self.gp[0])
+        dy = -(self.robotstate[1]-self.gp[1])
+        xp = dx*math.cos(self.robotstate[4]) + dy*math.sin(self.robotstate[4])
+        yp = -dx*math.sin(self.robotstate[4]) + dy*math.cos(self.robotstate[4])
+        thet = math.atan2(yp, xp)
+        selfstate[3] = thet/math.pi
 
+        # #######################################input1-->雷达信息#########################################3333
+        # laser = []
+        # temp = []
+        # sensor_info = []
+        # for j in range(len(self.laser.ranges)):
+        #     tempval = self.laser.ranges[j]
+        #     # 归一化处理
+        #     if tempval > MAXLASERDIS:
+        #         tempval = MAXLASERDIS
+        #     temp.append(tempval/MAXLASERDIS)
+        # laser = temp
+        # # 将agent robot的input2和input1合并成为一个vector:[input2 input1]
+
+        # # env_info.append(laser)
+        # # env_info.append(selfstate)
+        # for i in range(len(laser)+len(selfstate)):
+        #     if i<len(laser):
+        #         sensor_info.append(laser[i])
+        #     else:
+        #         sensor_info.append(selfstate[i-len(laser)])
+        # #第一纬度是相机信息
+        # # input1-->相机
+        # env_info.append(sensor_info)
+        # #print("The state is:{}".format(state))
+
+        
+        # shape of image_matrix [768,1024,3]
+        # self.image_matrix = np.uint8(self.image_matrix_callback)
+        # self.image_matrix = cv2.resize(self.image_matrix, (self.img_size, self.img_size))
+        # # shape of image_matrix [80,80,3]
+        # self.image_matrix = cv2.cvtColor(self.image_matrix, cv2.COLOR_RGB2GRAY)
+        # # shape of image_matrix [80,80]
+        # self.image_matrix = np.reshape(self.image_matrix, (self.img_size, self.img_size))
+        # # shape of image_matrix [80,80]
+        # cv2.imshow("Image window", self.image_matrix)
+        # cv2.waitKey(2)
+        # (rows,cols,channels) = self.image_matrix.shape
+        # print("image matrix rows:{}".format(rows))
+        # print("image matrix cols:{}".format(cols))
+        # print("image matrix channels:{}".format(channels))
+        env_info.append("self.image_matrix")
+        # print("shape of image matrix={}".format(self.image_matrix.shape))
+
+        # 判断是否终止
+        self.done_list = True
+        # 是否到达目标点判断
+        if self.d > self.dis:
+            self.done_list = False  # 不终止
+        else:
+            self.done_list = True  # 终止
+            print("Goal Point!")
+        '''
+        # 障碍物判断
+        for i in range(len(self.obs_pos)):
+            # 障碍物的半径为0.5m
+            if math.sqrt((self.robotstate[0]-self.obs_pos[i][0])**2 + (self.robotstate[1]-self.obs_pos[i][1])**2) >= 1.0:
+                self.done_list = False  # 不终止
+        '''
+        env_info.append(self.done_list)
+
+        self.r = self.getreward()
+        
+        env_info.append(self.r)
+        
+        # 小车的坐标
+        jackal_x = self.robotstate[0]
+        jackal_y = self.robotstate[1]
+
+        self.v_last = self.cmd[0]
+        self.w_last = self.cmd[1]
+        observation.append(jackal_x)
+        observation.append(jackal_y)
+        observation.append(self.gp[0])
+        observation.append(self.gp[1])
+        observation.append(self.v_last)
+        observation.append(self.w_last)
+        observation=np.array(observation)
+        return observation,self.r,self.done_list
+    
 
     def step(self, cmd=[1.0, 0.0]):
         self.d_last = math.sqrt((self.robotstate[0] - self.gp[0])**2 + (self.robotstate[1] - self.gp[1])**2)
